@@ -10,7 +10,10 @@ braille sub-cell grid, plots each in-range aircraft as a heading arrow
 labeled with its callsign (or ICAO hex if no callsign has been received
 yet), and updates live as dump1090 reports new positions. Click an
 aircraft's arrow to see its callsign, altitude, speed, and heading in the
-status line.
+status line. On terminals with color support, aircraft are drawn in a
+bright, high-contrast color distinct from the dimmer chart chrome;
+terminals without color support fall back to the existing uncolored
+rendering.
 
 ## Install / link
 
