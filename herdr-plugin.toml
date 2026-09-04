@@ -1,0 +1,26 @@
+id = "dev.coryforsythe.herdr-flight-radar"
+name = "Flight Radar"
+version = "0.1.0"
+min_herdr_version = "0.8.0"
+description = "Real-time ADS-B flight radar TUI backed by dump1090"
+platforms = ["linux", "macos"]
+
+[[actions]]
+id = "open"
+title = "Open Flight Radar"
+description = "Open the ADS-B flight radar as a split pane"
+contexts = ["workspace"]
+command = ["sh", "bin/run-python.sh", "bin/open_radar.py"]
+
+[[panes]]
+id = "radar"
+title = "Flight Radar"
+description = "Live ADS-B radar display backed by dump1090"
+placement = "split"
+command = ["sh", "bin/run-python.sh", "src/radar_tui.py"]
+
+[[keys.command]]
+key = "prefix+r"
+type = "plugin_action"
+command = "dev.coryforsythe.herdr-flight-radar.open"
+description = "Open Flight Radar"
