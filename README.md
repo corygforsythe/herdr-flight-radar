@@ -6,9 +6,11 @@ as a TUI split pane, backed by [dump1090](https://github.com/antirez/dump1090)
 location.
 
 The radar draws range rings and cardinal (N/E/S/W) markers on a Unicode
-braille sub-cell grid, plots each in-range aircraft as a heading arrow, and
-updates live as dump1090 reports new positions. Click an aircraft to see its
-callsign, altitude, speed, and heading in the status line.
+braille sub-cell grid, plots each in-range aircraft as a heading arrow
+labeled with its callsign (or ICAO hex if no callsign has been received
+yet), and updates live as dump1090 reports new positions. Click an
+aircraft's arrow to see its callsign, altitude, speed, and heading in the
+status line.
 
 ## Install / link
 
@@ -95,7 +97,7 @@ and don't require a terminal at all — see `test/`.
 
 ## Verification
 
-- `python3 -m unittest discover -s test -p 'test_*.py'` — 55 unit tests
+- `python3 -m unittest discover -s test -p 'test_*.py'` — 63 unit tests
   covering haversine/bearing math, SBS parsing and aircraft-state merging,
   config validation, dump1090 process management (mocked), radar
   projection/rendering, and mouse click-vs-motion filtering.

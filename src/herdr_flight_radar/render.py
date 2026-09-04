@@ -24,6 +24,14 @@ UNKNOWN_HEADING_GLYPH = "●"
 
 RING_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 
+MAX_LABEL_LEN = 8
+
+
+def aircraft_label(ac):
+    """Callsign if the feed has reported one, else the ICAO hex."""
+    callsign = (ac.callsign or "").strip()
+    return (callsign or ac.hex)[:MAX_LABEL_LEN]
+
 
 class BrailleCanvas:
     def __init__(self, width_cells, height_cells):
@@ -94,6 +102,23 @@ def _cell_for_bearing(canvas, bearing_deg_, fraction=1.0):
     return row, col
 
 
+def _place_label(grid, row, col, label):
+    """Write label into blank cells immediately right of (row, col).
+
+    Stops at the first non-blank cell (ring, marker, another aircraft's
+    glyph, or grid edge) so labels never clobber other content; a label
+    that doesn't fully fit is silently truncated rather than wrapped or
+    overlaid elsewhere, keeping a crowded radar legible.
+    """
+    width_cells = len(grid[0]) if grid else 0
+    c = col + 1
+    for ch in label:
+        if c >= width_cells or grid[row][c] != " ":
+            break
+        grid[row][c] = ch
+        c += 1
+
+
 class Frame:
     def __init__(self, lines, aircraft_cells, center_cell):
         self.lines = lines
@@ -108,10 +133,13 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
                   height_cells):
     """Render one radar frame.
 
-    aircraft: iterable of objects with .hex, .lat, .lon, .track_deg
+    aircraft: iterable of objects with .hex, .callsign, .lat, .lon,
+    .track_deg
     Returns a Frame with plain text lines (range rings, cardinal markers,
-    and one glyph per visible aircraft) plus a cell -> hex map for
-    mouse-click hit testing.
+    a heading glyph plus an adjacent identifying label per visible
+    aircraft) plus a cell -> hex map for mouse-click hit testing. The hit
+    map only ever points at the glyph's own cell, never a label cell, so
+    click-to-select is unaffected by label placement.
     """
     canvas = BrailleCanvas(width_cells, height_cells)
     for frac in RING_FRACTIONS:
@@ -137,6 +165,7 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
         glyph = heading_glyph(ac.track_deg)
         grid[row][col] = glyph
         aircraft_cells[(row, col)] = ac.hex
+        _place_label(grid, row, col, aircraft_label(ac))
 
     lines = ["".join(row) for row in grid]
     return Frame(lines=lines, aircraft_cells=aircraft_cells,
