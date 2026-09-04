@@ -38,13 +38,15 @@ def _init_colors():
         try:
             curses.use_default_colors()
             bg = -1
+            chart_fg = -1
         except curses.error:
             bg = curses.COLOR_BLACK
+            chart_fg = curses.COLOR_WHITE
         # Aircraft (the important moving thing) get a bright, high-contrast
         # color; chart chrome (range rings, cardinal markers) stays
         # dim/default so aircraft stand out against it on both light and
         # dark terminals.
-        curses.init_pair(CHART_COLOR_PAIR, curses.COLOR_WHITE, bg)
+        curses.init_pair(CHART_COLOR_PAIR, chart_fg, bg)
         curses.init_pair(AIRCRAFT_COLOR_PAIR, curses.COLOR_CYAN, bg)
         return True
     except curses.error:
@@ -160,8 +162,11 @@ def _curses_main(stdscr, cfg, table, feed):
             )
             if selected_cell is not None:
                 row, col = selected_cell
+                highlight_attr = curses.A_REVERSE | curses.A_BOLD
+                if color:
+                    highlight_attr |= curses.color_pair(AIRCRAFT_COLOR_PAIR)
                 try:
-                    stdscr.chgat(row, col, 1, curses.A_REVERSE | curses.A_BOLD)
+                    stdscr.chgat(row, col, 1, highlight_attr)
                 except curses.error:
                     pass
 
