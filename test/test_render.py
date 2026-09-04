@@ -8,8 +8,9 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 from herdr_flight_radar import render
 
 
-def ac(hex_, lat, lon, track_deg=None):
-    return SimpleNamespace(hex=hex_, lat=lat, lon=lon, track_deg=track_deg)
+def ac(hex_, lat, lon, track_deg=None, callsign=None):
+    return SimpleNamespace(hex=hex_, lat=lat, lon=lon, track_deg=track_deg,
+                            callsign=callsign)
 
 
 class HeadingGlyphTest(unittest.TestCase):
@@ -85,6 +86,56 @@ class RenderFrameTest(unittest.TestCase):
     def test_hex_at_returns_none_for_empty_cell(self):
         frame = render.render_frame(10.0, 20.0, 100.0, [], 40, 20)
         self.assertIsNone(frame.hex_at(0, 0))
+
+
+class AircraftLabelTest(unittest.TestCase):
+    def test_uses_callsign_when_present(self):
+        aircraft = ac("ABC123", 10.0, 20.0, callsign="UAL123")
+        self.assertEqual(render.aircraft_label(aircraft), "UAL123")
+
+    def test_falls_back_to_hex_when_no_callsign(self):
+        aircraft = ac("ABC123", 10.0, 20.0, callsign=None)
+        self.assertEqual(render.aircraft_label(aircraft), "ABC123")
+
+    def test_falls_back_to_hex_for_blank_callsign(self):
+        aircraft = ac("ABC123", 10.0, 20.0, callsign="   ")
+        self.assertEqual(render.aircraft_label(aircraft), "ABC123")
+
+    def test_label_is_truncated(self):
+        aircraft = ac("ABC123", 10.0, 20.0, callsign="LONGCALLSIGN99")
+        self.assertLessEqual(len(render.aircraft_label(aircraft)), render.MAX_LABEL_LEN)
+
+
+class RenderFrameLabelTest(unittest.TestCase):
+    def test_label_with_callsign_appears_next_to_arrow(self):
+        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        self.assertTrue(frame.lines[row][col + 1:col + 4].startswith("UAL"))
+
+    def test_label_falls_back_to_hex_without_callsign(self):
+        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign=None)]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        self.assertTrue(frame.lines[row][col + 1:col + 4].startswith("ABC"))
+
+    def test_crowded_area_truncates_label_instead_of_overwriting_ring(self):
+        # This point lands close enough to a range ring that only a
+        # couple of blank cells are open before ring glyphs start; the
+        # label must stop there instead of overwriting the ring.
+        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        self.assertNotIn("UAL123", frame.lines[row])
+
+    def test_label_does_not_change_hit_testing(self):
+        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), hx = next(iter(frame.aircraft_cells.items()))
+        self.assertEqual(hx, "ABC123")
+        self.assertEqual(frame.hex_at(row, col), "ABC123")
+        # The label cell itself (adjacent to the glyph) must not be a hit target.
+        self.assertNotIn((row, col + 1), frame.aircraft_cells)
 
 
 class BrailleCanvasTest(unittest.TestCase):
