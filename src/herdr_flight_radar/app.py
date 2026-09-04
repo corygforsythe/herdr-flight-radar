@@ -15,6 +15,10 @@ from . import sbs
 
 REFRESH_SECONDS = 1.0
 STATUS_ROWS = 2
+CLICK_BSTATE_MASK = (
+    curses.BUTTON1_CLICKED | curses.BUTTON1_PRESSED | curses.BUTTON1_RELEASED
+    | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED
+)
 
 
 def format_detail(ac, center_lat, center_lon):
@@ -35,12 +39,13 @@ def format_detail(ac, center_lat, center_lon):
 
 def visible_sorted(cfg, table):
     aircraft = table.snapshot()
-    in_range = [
-        ac for ac in aircraft
-        if geo.haversine_miles(cfg.lat, cfg.lon, ac.lat, ac.lon) <= cfg.radius_miles
+    with_distance = [
+        (geo.haversine_miles(cfg.lat, cfg.lon, ac.lat, ac.lon), ac)
+        for ac in aircraft
     ]
-    in_range.sort(key=lambda ac: geo.haversine_miles(cfg.lat, cfg.lon, ac.lat, ac.lon))
-    return in_range
+    in_range = [(dist, ac) for dist, ac in with_distance if dist <= cfg.radius_miles]
+    in_range.sort(key=lambda pair: pair[0])
+    return [ac for _dist, ac in in_range]
 
 
 def run_plain_text(cfg, table):
@@ -77,7 +82,7 @@ def _curses_main(stdscr, cfg, table, feed):
     curses.curs_set(0)
     stdscr.nodelay(True)
     stdscr.timeout(int(REFRESH_SECONDS * 1000))
-    curses.mousemask(curses.ALL_MOUSE_EVENTS | curses.REPORT_MOUSE_POSITION)
+    curses.mousemask(curses.ALL_MOUSE_EVENTS)
 
     selected_hex = None
 
@@ -146,6 +151,8 @@ def _curses_main(stdscr, cfg, table, feed):
             try:
                 _, mx, my, _, bstate = curses.getmouse()
             except curses.error:
+                continue
+            if not (bstate & CLICK_BSTATE_MASK):
                 continue
             hit = frame.hex_at(my, mx)
             if hit is not None:
