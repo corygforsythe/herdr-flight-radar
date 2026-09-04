@@ -95,10 +95,10 @@ and don't require a terminal at all — see `test/`.
 
 ## Verification
 
-- `python3 -m unittest discover -s test -p 'test_*.py'` — 54 unit tests
+- `python3 -m unittest discover -s test -p 'test_*.py'` — 55 unit tests
   covering haversine/bearing math, SBS parsing and aircraft-state merging,
-  config validation, dump1090 process management (mocked), and radar
-  projection/rendering.
+  config validation, dump1090 process management (mocked), radar
+  projection/rendering, and mouse click-vs-motion filtering.
 - Linked against a real local herdr 0.8.2 install (`herdr plugin link`,
   `herdr plugin list`) and opened via the plugin action end-to-end in a
   live pane.
