@@ -138,6 +138,24 @@ class RenderFrameLabelTest(unittest.TestCase):
         self.assertNotIn((row, col + 1), frame.aircraft_cells)
 
 
+class RenderFrameAircraftSpansTest(unittest.TestCase):
+    def test_span_covers_glyph_and_label(self):
+        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        self.assertEqual(len(frame.aircraft_spans), 1)
+        span_row, span_col, span_len = frame.aircraft_spans[0]
+        self.assertEqual((span_row, span_col), (row, col))
+        # 1 glyph cell + however many label chars actually fit.
+        placed_label = frame.lines[row][col + 1:col + span_len]
+        self.assertEqual(span_len, 1 + len(placed_label))
+        self.assertTrue(placed_label == "" or "UAL123".startswith(placed_label))
+
+    def test_no_aircraft_means_no_spans(self):
+        frame = render.render_frame(10.0, 20.0, 100.0, [], 40, 20)
+        self.assertEqual(frame.aircraft_spans, [])
+
+
 class BrailleCanvasTest(unittest.TestCase):
     def test_set_px_out_of_bounds_is_ignored(self):
         canvas = render.BrailleCanvas(width_cells=4, height_cells=4)

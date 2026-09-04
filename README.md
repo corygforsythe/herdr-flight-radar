@@ -10,7 +10,10 @@ braille sub-cell grid, plots each in-range aircraft as a heading arrow
 labeled with its callsign (or ICAO hex if no callsign has been received
 yet), and updates live as dump1090 reports new positions. Click an
 aircraft's arrow to see its callsign, altitude, speed, and heading in the
-status line.
+status line. On terminals with color support, aircraft are drawn in a
+bright, high-contrast color distinct from the dimmer chart chrome;
+terminals without color support fall back to the existing uncolored
+rendering.
 
 ## Install / link
 
@@ -97,7 +100,7 @@ and don't require a terminal at all — see `test/`.
 
 ## Verification
 
-- `python3 -m unittest discover -s test -p 'test_*.py'` — 63 unit tests
+- `python3 -m unittest discover -s test -p 'test_*.py'` — 71 unit tests
   covering haversine/bearing math, SBS parsing and aircraft-state merging,
   config validation, dump1090 process management (mocked), radar
   projection/rendering, and mouse click-vs-motion filtering.
