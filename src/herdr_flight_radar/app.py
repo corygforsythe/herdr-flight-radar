@@ -20,6 +20,40 @@ CLICK_BSTATE_MASK = (
     | curses.BUTTON1_DOUBLE_CLICKED | curses.BUTTON1_TRIPLE_CLICKED
 )
 
+CHART_COLOR_PAIR = 1
+AIRCRAFT_COLOR_PAIR = 2
+
+
+def _init_colors():
+    """Set up chart-vs-aircraft color pairs if the terminal supports color.
+
+    Returns True if colors were set up (callers should use the color-pair
+    attrs above), False if this terminal can't do color and callers must
+    fall back to the plain, uncolored rendering.
+    """
+    try:
+        if not curses.has_colors() or curses.COLORS < 8:
+            return False
+        curses.start_color()
+        try:
+            curses.use_default_colors()
+            bg = -1
+        except curses.error:
+            bg = curses.COLOR_BLACK
+        # Aircraft (the important moving thing) get a bright, high-contrast
+        # color; chart chrome (range rings, cardinal markers) stays
+        # dim/default so aircraft stand out against it on both light and
+        # dark terminals.
+        curses.init_pair(CHART_COLOR_PAIR, curses.COLOR_WHITE, bg)
+        curses.init_pair(AIRCRAFT_COLOR_PAIR, curses.COLOR_CYAN, bg)
+        return True
+    except curses.error:
+        # No initialized screen (e.g. outside a real curses.wrapper session)
+        # or an environment that otherwise can't do color negotiation at
+        # all; fall back to the plain, uncolored rendering rather than
+        # crashing or corrupting output.
+        return False
+
 
 def format_detail(ac, center_lat, center_lon):
     distance = geo.haversine_miles(center_lat, center_lon, ac.lat, ac.lon)
@@ -83,6 +117,7 @@ def _curses_main(stdscr, cfg, table, feed):
     stdscr.nodelay(True)
     stdscr.timeout(int(REFRESH_SECONDS * 1000))
     curses.mousemask(curses.ALL_MOUSE_EVENTS)
+    color = _init_colors()
 
     selected_hex = None
 
@@ -98,13 +133,25 @@ def _curses_main(stdscr, cfg, table, feed):
         )
 
         stdscr.erase()
+        chart_attr = curses.color_pair(CHART_COLOR_PAIR) if color else curses.A_NORMAL
         for i, line in enumerate(frame.lines):
             if i >= height - STATUS_ROWS:
                 break
             try:
-                stdscr.addstr(i, 0, line[:width])
+                stdscr.addstr(i, 0, line[:width], chart_attr)
             except curses.error:
                 pass
+
+        if color:
+            aircraft_attr = curses.color_pair(AIRCRAFT_COLOR_PAIR) | curses.A_BOLD
+            for row, col, length in frame.aircraft_spans:
+                if row >= height - STATUS_ROWS or col >= width:
+                    continue
+                span_len = min(length, width - col)
+                try:
+                    stdscr.chgat(row, col, span_len, aircraft_attr)
+                except curses.error:
+                    pass
 
         if selected_hex is not None:
             selected_cell = next(

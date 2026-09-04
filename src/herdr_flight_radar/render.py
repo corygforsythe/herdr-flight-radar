@@ -108,7 +108,9 @@ def _place_label(grid, row, col, label):
     Stops at the first non-blank cell (ring, marker, another aircraft's
     glyph, or grid edge) so labels never clobber other content; a label
     that doesn't fully fit is silently truncated rather than wrapped or
-    overlaid elsewhere, keeping a crowded radar legible.
+    overlaid elsewhere, keeping a crowded radar legible. Returns the
+    number of label characters actually placed, so callers can compute
+    the full glyph+label span for rendering purposes.
     """
     width_cells = len(grid[0]) if grid else 0
     c = col + 1
@@ -117,13 +119,18 @@ def _place_label(grid, row, col, label):
             break
         grid[row][c] = ch
         c += 1
+    return c - (col + 1)
 
 
 class Frame:
-    def __init__(self, lines, aircraft_cells, center_cell):
+    def __init__(self, lines, aircraft_cells, center_cell, aircraft_spans=()):
         self.lines = lines
         self.aircraft_cells = aircraft_cells  # {(row, col): hex}
         self.center_cell = center_cell
+        # (row, col_start, length) covering each aircraft's glyph + label,
+        # for color rendering only; hit-testing must keep using
+        # aircraft_cells (glyph cell only), per _place_label's contract.
+        self.aircraft_spans = aircraft_spans
 
     def hex_at(self, row, col):
         return self.aircraft_cells.get((row, col))
@@ -155,6 +162,7 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
     grid[center_row][center_col] = "+"
 
     aircraft_cells = {}
+    aircraft_spans = []
     for ac in aircraft:
         px = project_to_px(ac.lat, ac.lon, center_lat, center_lon, radius_miles, canvas)
         if px is None:
@@ -165,8 +173,10 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
         glyph = heading_glyph(ac.track_deg)
         grid[row][col] = glyph
         aircraft_cells[(row, col)] = ac.hex
-        _place_label(grid, row, col, aircraft_label(ac))
+        label_len = _place_label(grid, row, col, aircraft_label(ac))
+        aircraft_spans.append((row, col, 1 + label_len))
 
     lines = ["".join(row) for row in grid]
     return Frame(lines=lines, aircraft_cells=aircraft_cells,
-                 center_cell=(center_row, center_col))
+                 center_cell=(center_row, center_col),
+                 aircraft_spans=aircraft_spans)

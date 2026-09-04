@@ -97,7 +97,7 @@ and don't require a terminal at all — see `test/`.
 
 ## Verification
 
-- `python3 -m unittest discover -s test -p 'test_*.py'` — 63 unit tests
+- `python3 -m unittest discover -s test -p 'test_*.py'` — 71 unit tests
   covering haversine/bearing math, SBS parsing and aircraft-state merging,
   config validation, dump1090 process management (mocked), radar
   projection/rendering, and mouse click-vs-motion filtering.
