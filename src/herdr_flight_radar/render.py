@@ -177,17 +177,22 @@ def _place_label(grid, row, col, label):
 
 
 class Frame:
-    def __init__(self, lines, aircraft_cells, center_cell, aircraft_spans=()):
+    def __init__(self, lines, aircraft_cells, center_cell, aircraft_spans=(),
+                 hit_cells=None):
         self.lines = lines
-        self.aircraft_cells = aircraft_cells  # {(row, col): hex}
+        self.aircraft_cells = aircraft_cells  # {(row, col): hex} -- glyph cells only
         self.center_cell = center_cell
         # (row, col_start, length) covering each aircraft's glyph + label,
-        # for color rendering only; hit-testing must keep using
-        # aircraft_cells (glyph cell only), per _place_label's contract.
+        # for color rendering.
         self.aircraft_spans = aircraft_spans
+        # {(row, col): hex} for every cell of the glyph *and* its label,
+        # wherever _place_label actually drew it this frame. Used for
+        # click-to-select so clicking the label text selects the aircraft
+        # too, not just its glyph.
+        self.hit_cells = hit_cells if hit_cells is not None else dict(aircraft_cells)
 
     def hex_at(self, row, col):
-        return self.aircraft_cells.get((row, col))
+        return self.hit_cells.get((row, col))
 
 
 def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
@@ -199,8 +204,9 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
     Returns a Frame with plain text lines (range rings, cardinal markers,
     a heading glyph plus an adjacent identifying label per visible
     aircraft) plus a cell -> hex map for mouse-click hit testing. The hit
-    map only ever points at the glyph's own cell, never a label cell, so
-    click-to-select is unaffected by label placement.
+    map covers both the glyph's own cell and wherever its label actually
+    landed this frame (right, left, above, or below), so clicking either
+    selects the aircraft.
     """
     canvas = BrailleCanvas(width_cells, height_cells)
     for frac in RING_FRACTIONS:
@@ -235,8 +241,11 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
         aircraft_cells[(row, col)] = ac.hex
 
     aircraft_spans = []
+    hit_cells = dict(aircraft_cells)
     for row, col, ac in sorted(positions, key=lambda p: p[2].hex):
         label_row, label_start, label_len = _place_label(grid, row, col, aircraft_label(ac))
+        for i in range(label_len):
+            hit_cells[(label_row, label_start + i)] = ac.hex
         if label_len and label_row != row:
             aircraft_spans.append((row, col, 1))
             aircraft_spans.append((label_row, label_start, label_len))
@@ -248,4 +257,4 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
     lines = ["".join(row) for row in grid]
     return Frame(lines=lines, aircraft_cells=aircraft_cells,
                  center_cell=(center_row, center_col),
-                 aircraft_spans=aircraft_spans)
+                 aircraft_spans=aircraft_spans, hit_cells=hit_cells)
