@@ -128,6 +128,21 @@ class RenderFrameLabelTest(unittest.TestCase):
         (row, col), _hx = next(iter(frame.aircraft_cells.items()))
         self.assertNotIn("UAL123", frame.lines[row])
 
+    def test_label_flips_left_when_clipped_on_the_right(self):
+        # This point sits near the top of the radar where the outer ring's
+        # curve leaves only 5 blank cells to the right of the glyph before
+        # the ring resumes -- not enough for the 6-char "UAL123" callsign --
+        # but 7 blank cells open up to the left. Before the fix, the label
+        # always drew rightward and silently truncated to "UAL12"; the fix
+        # must notice the label doesn't fit to the right, and place the
+        # full label to the left instead so it's never partially visible.
+        aircraft = [ac("ABC123", 11.22719636721447, 20.109022060115862,
+                        track_deg=0, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        self.assertIn("UAL123", frame.lines[row])
+        self.assertLess(frame.lines[row].index("UAL123"), col)
+
     def test_label_does_not_change_hit_testing(self):
         aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
         frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)

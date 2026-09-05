@@ -102,24 +102,49 @@ def _cell_for_bearing(canvas, bearing_deg_, fraction=1.0):
     return row, col
 
 
-def _place_label(grid, row, col, label):
-    """Write label into blank cells immediately right of (row, col).
-
-    Stops at the first non-blank cell (ring, marker, another aircraft's
-    glyph, or grid edge) so labels never clobber other content; a label
-    that doesn't fully fit is silently truncated rather than wrapped or
-    overlaid elsewhere, keeping a crowded radar legible. Returns the
-    number of label characters actually placed, so callers can compute
-    the full glyph+label span for rendering purposes.
-    """
+def _blank_run(grid, row, col, step):
+    """Count contiguous blank cells in `row` starting after `col`, stepping by `step`."""
     width_cells = len(grid[0]) if grid else 0
-    c = col + 1
-    for ch in label:
-        if c >= width_cells or grid[row][c] != " ":
-            break
-        grid[row][c] = ch
-        c += 1
-    return c - (col + 1)
+    count = 0
+    c = col + step
+    while 0 <= c < width_cells and grid[row][c] == " ":
+        count += 1
+        c += step
+    return count
+
+
+def _place_label(grid, row, col, label):
+    """Write label into blank cells beside (row, col), never letting a
+    label that would otherwise fit run off the grid edge.
+
+    Prefers immediately right of the glyph, matching prior behavior. If
+    the label doesn't fully fit there (grid edge or other content in the
+    way, e.g. a ring or another aircraft) but it fully fits immediately
+    left of the glyph instead, it is placed there so a moving aircraft's
+    label doesn't disappear or shrink as it nears the edge of the pane
+    or a ring. If it doesn't fully fit on either side, it falls back to
+    the prior behavior of truncating on the right, keeping a crowded
+    radar legible when there's genuinely no room to show the whole
+    label anywhere. Returns (col_start, length) of the placed label
+    span so callers can compute the full glyph+label span for rendering
+    purposes.
+    """
+    label_len = len(label)
+    right_space = _blank_run(grid, row, col, +1)
+
+    if right_space < label_len:
+        left_space = _blank_run(grid, row, col, -1)
+        if left_space >= label_len:
+            start = col - label_len
+            for i, ch in enumerate(label):
+                grid[row][start + i] = ch
+            return start, label_len
+
+    n = min(label_len, right_space)
+    start = col + 1
+    for i, ch in enumerate(label[:n]):
+        grid[row][start + i] = ch
+    return start, n
 
 
 class Frame:
@@ -173,8 +198,10 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
         glyph = heading_glyph(ac.track_deg)
         grid[row][col] = glyph
         aircraft_cells[(row, col)] = ac.hex
-        label_len = _place_label(grid, row, col, aircraft_label(ac))
-        aircraft_spans.append((row, col, 1 + label_len))
+        label_start, label_len = _place_label(grid, row, col, aircraft_label(ac))
+        span_start = min(col, label_start)
+        span_end = max(col, label_start + label_len - 1) if label_len else col
+        aircraft_spans.append((row, span_start, span_end - span_start + 1))
 
     lines = ["".join(row) for row in grid]
     return Frame(lines=lines, aircraft_cells=aircraft_cells,

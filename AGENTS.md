@@ -37,6 +37,12 @@ This file is the project's committed home for project-intrinsic agent knowledge:
     Python) is already on that PATH, but `dump1090` (typically
     `/opt/homebrew/bin/dump1090`) is not — `bin/run-python.sh` extends PATH
     before exec'ing python3 so `shutil.which("dump1090")` still finds it.
+- `render._place_label` (see its docstring) draws each aircraft's label to
+  the right of its glyph by default but flips to the left when the label
+  wouldn't otherwise fully fit (grid edge, ring, other content) — don't
+  assume a label cell is always at `col + 1`; use `Frame.aircraft_spans`
+  for the actual drawn range. Hit-testing still only ever uses the glyph's
+  own cell (`aircraft_cells`), independent of label direction.
 - Mouse click-to-detail uses `curses.mousemask`, not manual SGR escape
   parsing — verified end-to-end via a real PTY harness (inject raw mouse
   bytes, confirm the hit aircraft's detail line renders). That harness
