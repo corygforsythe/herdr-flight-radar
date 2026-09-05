@@ -47,15 +47,14 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   Hit-testing (`Frame.hex_at`/`hit_cells`) covers both the glyph's own cell
   and wherever its label actually landed that frame, so clicking either
   selects the aircraft; `aircraft_cells` (glyph-only) is kept separately
-  for the selected-aircraft highlight and the in-range count.
-  `render_frame` draws every aircraft's
-  glyph before placing any label (so a later glyph can't clobber an
-  earlier label) and places labels in a fixed order (sorted by hex) so
-  collisions resolve the same way every frame. Disclosed limit: in an
-  extremely dense cluster there can be more aircraft than non-colliding
-  candidate positions, so some overlap can still occur there — the
-  search is best-effort, not a guarantee of full non-overlap at every
-  density.
+  for the selected-aircraft highlight and the in-range count. `render_frame`
+  draws every aircraft's glyph before placing any label (so a later glyph
+  can't clobber an earlier label) and places labels in a fixed order
+  (sorted by hex) so collisions resolve the same way every frame.
+  Disclosed limit: in an extremely dense cluster there can be more
+  aircraft than non-colliding candidate positions, so some overlap can
+  still occur there — the search is best-effort, not a guarantee of full
+  non-overlap at every density.
 - Mouse click-to-detail uses `curses.mousemask`, not manual SGR escape
   parsing — verified end-to-end via a real PTY harness (inject raw mouse
   bytes, confirm the hit aircraft's detail line renders). That harness
