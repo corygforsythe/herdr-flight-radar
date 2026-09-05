@@ -19,8 +19,19 @@ DOT_BITS = {
 }
 
 # Index by an 8-way bucket of true track, 0 = north, going clockwise.
-HEADING_GLYPHS = ["↑", "↗", "→", "↘", "↓", "↙", "←", "↖"]
-UNKNOWN_HEADING_GLYPH = "●"
+# These specific characters (Unicode "black arrow" glyphs, U+27A1/U+2B05-2B0B,
+# plus ASCII "o") are chosen because they are East Asian Width Neutral/Narrow
+# -- guaranteed single-column everywhere -- unlike the plain arrows
+# (U+2190-2199) and BLACK CIRCLE (U+25CF) used previously, which are Width
+# Ambiguous and can render double-width in some terminal/font configs (e.g.
+# WezTerm with certain fonts). A double-width glyph desyncs the terminal's
+# actual on-screen columns from curses' internal column model for
+# everything drawn after it on that row -- including the label immediately
+# to its right -- so a click that visually lands on the label misses its
+# `hit_cells` entry even though the glyph itself (still under the cursor
+# either way) still resolves correctly. See RenderGlyphWidthTest.
+HEADING_GLYPHS = ["⬆", "⬈", "➡", "⬊", "⬇", "⬋", "⬅", "⬉"]
+UNKNOWN_HEADING_GLYPH = "o"
 
 RING_FRACTIONS = (0.25, 0.5, 0.75, 1.0)
 
