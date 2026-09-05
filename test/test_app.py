@@ -33,7 +33,10 @@ class _FakeStdscr:
         pass
 
     def erase(self):
-        pass
+        self.erase_calls = getattr(self, "erase_calls", 0) + 1
+
+    def clear(self):
+        self.clear_calls = getattr(self, "clear_calls", 0) + 1
 
     def addstr(self, row, col, text, attr=0):
         self.addstr_calls.append((row, col, text))
@@ -174,6 +177,51 @@ class CursesMainMouseFilterTest(unittest.TestCase):
         detail_row = stdscr.height - 1
         detail_texts = [text for r, _c, text in stdscr.addstr_calls if r == detail_row]
         self.assertIn("ABC123", detail_texts[-1])
+
+
+class ForceRefreshKeyTest(unittest.TestCase):
+    def test_r_forces_fresh_fetch_and_full_redraw(self):
+        cfg = Config(lat=10.0, lon=20.0, radius_miles=100.0, path="unused")
+        table = sbs.AircraftTable()
+        table.update_from_fields({
+            "hex": "ABC123", "callsign": "TEST01", "altitude_ft": 5000.0,
+            "speed_kt": 200.0, "track_deg": 90.0, "lat": 10.1, "lon": 20.0,
+        })
+        expire_stale = mock.patch.object(
+            table, "expire_stale", wraps=table.expire_stale,
+        ).start()
+        snapshot = mock.patch.object(
+            table, "snapshot", wraps=table.snapshot,
+        ).start()
+        self.addCleanup(mock.patch.stopall)
+
+        stdscr = _FakeStdscr(height=22, width=44, chars=[ord("r"), ord("q")])
+        feed = SimpleNamespace(connected=True)
+
+        with mock.patch.object(curses, "curs_set"), \
+                mock.patch.object(curses, "mousemask"):
+            app._curses_main(stdscr, cfg, table, feed)
+
+        # Two full loop iterations happen: the initial draw, then the one
+        # the "r" keypress forces (it must not wait for stdscr.timeout).
+        self.assertEqual(expire_stale.call_count, 2)
+        self.assertEqual(snapshot.call_count, 2)
+        # The forced iteration must use clear() (a genuine full repaint),
+        # not the normal incremental erase().
+        self.assertEqual(getattr(stdscr, "clear_calls", 0), 1)
+        self.assertEqual(getattr(stdscr, "erase_calls", 0), 1)
+
+    def test_r_is_case_insensitive(self):
+        cfg = Config(lat=10.0, lon=20.0, radius_miles=100.0, path="unused")
+        table = sbs.AircraftTable()
+        stdscr = _FakeStdscr(height=22, width=44, chars=[ord("R"), ord("q")])
+        feed = SimpleNamespace(connected=True)
+
+        with mock.patch.object(curses, "curs_set"), \
+                mock.patch.object(curses, "mousemask"):
+            app._curses_main(stdscr, cfg, table, feed)
+
+        self.assertEqual(getattr(stdscr, "clear_calls", 0), 1)
 
 
 class InitColorsTest(unittest.TestCase):

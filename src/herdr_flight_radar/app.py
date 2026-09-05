@@ -122,6 +122,7 @@ def _curses_main(stdscr, cfg, table, feed):
     color = _init_colors()
 
     selected_hex = None
+    force_full_redraw = False
 
     while True:
         height, width = stdscr.getmaxyx()
@@ -134,7 +135,15 @@ def _curses_main(stdscr, cfg, table, feed):
             width_cells, height_cells,
         )
 
-        stdscr.erase()
+        if force_full_redraw:
+            # clear() (unlike erase()) forces curses to retransmit every
+            # cell on the next refresh() instead of diffing against what it
+            # last drew, so a forced refresh is a genuine full repaint, not
+            # a no-op when the screen already looks current.
+            stdscr.clear()
+            force_full_redraw = False
+        else:
+            stdscr.erase()
         chart_attr = curses.color_pair(CHART_COLOR_PAIR) if color else curses.A_NORMAL
         for i, line in enumerate(frame.lines):
             if i >= height - STATUS_ROWS:
@@ -172,7 +181,7 @@ def _curses_main(stdscr, cfg, table, feed):
 
         status_row = height - 2
         conn = "connected" if feed.connected else "reconnecting..."
-        status = "aircraft in range: {n}  feed: {conn}  [click] select  [q] quit".format(
+        status = "aircraft in range: {n}  feed: {conn}  [click] select  [r] refresh  [q] quit".format(
             n=len(frame.aircraft_cells), conn=conn,
         )
         try:
@@ -199,6 +208,14 @@ def _curses_main(stdscr, cfg, table, feed):
         ch = stdscr.getch()
         if ch in (ord("q"), ord("Q")):
             return
+        if ch in (ord("r"), ord("R")):
+            # Loop back to the top immediately rather than waiting out the
+            # rest of this cycle's stdscr.timeout: the next iteration reads
+            # the table fresh (aircraft data streams into it continuously
+            # off the feed thread, so there's nothing else to "fetch") and
+            # force_full_redraw makes that iteration a full repaint.
+            force_full_redraw = True
+            continue
         if ch == curses.KEY_MOUSE:
             try:
                 _, mx, my, _, bstate = curses.getmouse()
