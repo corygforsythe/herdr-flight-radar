@@ -143,14 +143,59 @@ class RenderFrameLabelTest(unittest.TestCase):
         self.assertIn("UAL123", frame.lines[row])
         self.assertLess(frame.lines[row].index("UAL123"), col)
 
-    def test_label_does_not_change_hit_testing(self):
-        aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
-        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+    def test_clicking_label_cell_selects_the_aircraft(self):
+        aircraft = [ac("ABC123", 10.02, 20.0, track_deg=90, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 80, 40)
         (row, col), hx = next(iter(frame.aircraft_cells.items()))
         self.assertEqual(hx, "ABC123")
         self.assertEqual(frame.hex_at(row, col), "ABC123")
-        # The label cell itself (adjacent to the glyph) must not be a hit target.
+        # Glyph cell itself is unaffected -- still a hit target.
         self.assertNotIn((row, col + 1), frame.aircraft_cells)
+        # But clicking anywhere in the label text (right of the glyph, its
+        # default position) now also selects the aircraft.
+        self.assertEqual(frame.lines[row][col + 1:col + 1 + 6], "UAL123")
+        label_start = col + 1
+        self.assertEqual(frame.hex_at(row, label_start), "ABC123")
+        self.assertEqual(frame.hex_at(row, label_start + len("UAL123") - 1), "ABC123")
+
+    def test_clicking_label_placed_left_of_glyph_selects_the_aircraft(self):
+        # Same scenario as test_label_flips_left_when_clipped_on_the_right:
+        # collision avoidance places the label to the *left* of the glyph
+        # here, not the default right. The hit test must follow wherever
+        # the label actually landed rather than assuming col + 1.
+        aircraft = [ac("ABC123", 11.22719636721447, 20.109022060115862,
+                        track_deg=0, callsign="UAL123")]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 40, 20)
+        (row, col), _hx = next(iter(frame.aircraft_cells.items()))
+        label_start = frame.lines[row].index("UAL123")
+        self.assertLess(label_start, col)
+        self.assertEqual(frame.hex_at(row, label_start), "ABC123")
+        self.assertEqual(frame.hex_at(row, label_start + len("UAL123") - 1), "ABC123")
+
+    def test_clicking_label_placed_above_or_below_glyph_selects_the_aircraft(self):
+        # Force two aircraft into the same row so the second one's label
+        # can't fit left or right and must fall back to an above/below
+        # candidate (see RenderFrameLabelCollisionTest for the same setup).
+        aircraft = [
+            ac("AAA111", 10.02, 20.0, track_deg=90, callsign="UAL111"),
+            ac("BBB222", 10.02, 20.12, track_deg=90, callsign="DAL222"),
+        ]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 80, 40)
+        cells_by_hex = {hx: cell for cell, hx in frame.aircraft_cells.items()}
+        for hex_, label in (("AAA111", "UAL111"), ("BBB222", "DAL222")):
+            glyph_row, _glyph_col = cells_by_hex[hex_]
+            found = None
+            for r, line in enumerate(frame.lines):
+                idx = line.find(label)
+                if idx != -1:
+                    found = (r, idx)
+                    break
+            self.assertIsNotNone(found, "label {} not drawn anywhere".format(label))
+            label_row, label_start = found
+            self.assertEqual(frame.hex_at(label_row, label_start), hex_)
+            self.assertEqual(
+                frame.hex_at(label_row, label_start + len(label) - 1), hex_
+            )
 
 
 class RenderFrameLabelCollisionTest(unittest.TestCase):
