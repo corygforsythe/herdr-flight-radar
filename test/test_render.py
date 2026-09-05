@@ -1,5 +1,6 @@
 import os
 import sys
+import unicodedata
 import unittest
 from types import SimpleNamespace
 
@@ -15,19 +16,47 @@ def ac(hex_, lat, lon, track_deg=None, callsign=None):
 
 class HeadingGlyphTest(unittest.TestCase):
     def test_north(self):
-        self.assertEqual(render.heading_glyph(0), "↑")
+        self.assertEqual(render.heading_glyph(0), "⬆")
 
     def test_east(self):
-        self.assertEqual(render.heading_glyph(90), "→")
+        self.assertEqual(render.heading_glyph(90), "➡")
 
     def test_south(self):
-        self.assertEqual(render.heading_glyph(180), "↓")
+        self.assertEqual(render.heading_glyph(180), "⬇")
 
     def test_wraps_near_360(self):
-        self.assertEqual(render.heading_glyph(359), "↑")
+        self.assertEqual(render.heading_glyph(359), "⬆")
 
     def test_unknown_is_dot(self):
         self.assertEqual(render.heading_glyph(None), render.UNKNOWN_HEADING_GLYPH)
+
+
+class GlyphWidthTest(unittest.TestCase):
+    """Every heading glyph (and the unknown-heading marker) must be East
+    Asian Width Neutral or Narrow -- never Ambiguous or Wide. An Ambiguous-
+    width glyph can render double-width in some terminal/font configs (this
+    bit WezTerm users in practice: see AGENTS.md), which shifts real
+    on-screen columns for everything drawn after it on that row -- the
+    label included -- out of sync with curses' internal column model that
+    `hit_cells` is keyed on. A click that visually lands on the label then
+    misses its hit_cells entry even though the glyph itself, still under
+    the cursor either way, keeps working -- exactly the "glyph clicks
+    work, label clicks don't" split. This test pins the glyph set so that
+    regression can't reappear silently by someone reintroducing an
+    Ambiguous-width character.
+    """
+
+    def test_all_heading_glyphs_are_narrow_width(self):
+        for glyph in render.HEADING_GLYPHS:
+            width = unicodedata.east_asian_width(glyph)
+            self.assertIn(width, ("N", "Na"),
+                          "{!r} is East Asian Width {!r}, not narrow".format(glyph, width))
+
+    def test_unknown_heading_glyph_is_narrow_width(self):
+        width = unicodedata.east_asian_width(render.UNKNOWN_HEADING_GLYPH)
+        self.assertIn(width, ("N", "Na"),
+                      "{!r} is East Asian Width {!r}, not narrow".format(
+                          render.UNKNOWN_HEADING_GLYPH, width))
 
 
 class ProjectToPxTest(unittest.TestCase):

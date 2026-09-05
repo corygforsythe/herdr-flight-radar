@@ -142,6 +142,39 @@ class CursesMainMouseFilterTest(unittest.TestCase):
         self.assertEqual(detail_texts[1], "", "a motion-only event must not select an aircraft")
         self.assertIn("ABC123", detail_texts[2])
 
+    def test_clicking_the_label_cell_selects_the_aircraft(self):
+        # Regression test for the label-click-doesn't-select report: drive
+        # the real app._curses_main mouse-event handler (not just
+        # render.py's Frame.hex_at in isolation) with a click at the
+        # label's actual rendered cell, not the glyph's.
+        cfg = Config(lat=10.0, lon=20.0, radius_miles=100.0, path="unused")
+        table = sbs.AircraftTable()
+        table.update_from_fields({
+            "hex": "ABC123", "callsign": "TEST01", "altitude_ft": 5000.0,
+            "speed_kt": 200.0, "track_deg": 90.0, "lat": 10.1, "lon": 20.0,
+        })
+
+        frame = render.render_frame(cfg.lat, cfg.lon, cfg.radius_miles,
+                                     table.snapshot(), 40, 20)
+        label_cell = next(
+            cell for cell, hx in frame.hit_cells.items()
+            if hx == "ABC123" and cell not in frame.aircraft_cells
+        )
+        label_row, label_col = label_cell
+
+        stdscr = _FakeStdscr(height=22, width=44, chars=[curses.KEY_MOUSE, ord("q")])
+        feed = SimpleNamespace(connected=True)
+        mouse_events = [(0, label_col, label_row, 0, curses.BUTTON1_CLICKED)]
+
+        with mock.patch.object(curses, "curs_set"), \
+                mock.patch.object(curses, "mousemask"), \
+                mock.patch.object(curses, "getmouse", side_effect=mouse_events):
+            app._curses_main(stdscr, cfg, table, feed)
+
+        detail_row = stdscr.height - 1
+        detail_texts = [text for r, _c, text in stdscr.addstr_calls if r == detail_row]
+        self.assertIn("ABC123", detail_texts[-1])
+
 
 class InitColorsTest(unittest.TestCase):
     def test_no_color_support_falls_back_gracefully(self):

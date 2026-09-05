@@ -62,6 +62,21 @@ This file is the project's committed home for project-intrinsic agent knowledge:
   (`\x1b[?1000h`) for the `TERM` in use, not SGR (`\x1b[?1006h`); `curses`
   handles whichever the terminal actually negotiates, so this is a note
   for anyone re-running that kind of raw-byte test, not a plugin bug.
+- `HEADING_GLYPHS`/`UNKNOWN_HEADING_GLYPH` (`render.py`) must stay Unicode
+  East Asian Width Neutral or Narrow (`unicodedata.east_asian_width` in
+  `("N", "Na")`), enforced by `GlyphWidthTest`. Real regression: the
+  original plain-arrow glyphs (U+2190-2199) and the black-circle unknown-
+  heading marker (U+25CF) are Width *Ambiguous*, which some terminal/font
+  combinations (observed with WezTerm) render double-width. A double-
+  width glyph desyncs the terminal's actual on-screen columns from
+  curses' internal column model for everything drawn after it on that
+  row — including the adjacent label — so clicking the label (per
+  `hit_cells`, above) visually looks right but misses, while clicking the
+  glyph itself still works (it's under the cursor either way). This is
+  invisible to any test that drives curses/`hit_cells` directly
+  (coordinates match by construction there); it only shows up on a real
+  double-width-rendering terminal, hence checking glyph width up front
+  rather than only testing click coordinates.
 
 ## Maintaining this file
 
