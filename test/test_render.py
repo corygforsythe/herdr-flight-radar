@@ -153,6 +153,45 @@ class RenderFrameLabelTest(unittest.TestCase):
         self.assertNotIn((row, col + 1), frame.aircraft_cells)
 
 
+class RenderFrameLabelCollisionTest(unittest.TestCase):
+    def test_close_aircraft_labels_do_not_clip_each_other(self):
+        # Two aircraft close enough together that AAA111's default
+        # (immediately-right) label placement would run straight through
+        # BBB222's glyph cell. Before the fix, aircraft were drawn and
+        # labeled one at a time in input order: AAA111's label was placed
+        # while BBB222's glyph cell still looked blank (its glyph hadn't
+        # been drawn yet), so BBB222's glyph then overwrote the middle of
+        # AAA111's already-placed label, and BBB222's own label found no
+        # room left and vanished. The fix must place every aircraft's
+        # glyph before placing any label, and pick a non-colliding
+        # candidate placement for each, so both full labels survive.
+        aircraft = [
+            ac("AAA111", 10.02, 20.0, track_deg=90, callsign="UAL111"),
+            ac("BBB222", 10.02, 20.12, track_deg=90, callsign="DAL222"),
+        ]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 80, 40)
+        joined = "\n".join(frame.lines)
+        self.assertIn("UAL111", joined)
+        self.assertIn("DAL222", joined)
+
+    def test_dense_cluster_documents_partial_overlap_without_crashing(self):
+        # More aircraft crammed into a tiny canvas than there are
+        # non-colliding candidate positions. This is the disclosed density
+        # limit (see render._place_label's docstring): the fix guarantees
+        # a best-effort, non-crashing placement search, not full
+        # non-overlap under every possible density.
+        aircraft = [
+            ac("A{:05d}".format(i), 10.0 + i * 0.001, 20.0 + i * 0.001,
+               track_deg=90, callsign="C{:04d}".format(i))
+            for i in range(10)
+        ]
+        frame = render.render_frame(10.0, 20.0, 100.0, aircraft, 20, 10)
+        # No crash, and every rendered line stays within the canvas width
+        # even when labels can't all find a non-colliding home.
+        for line in frame.lines:
+            self.assertEqual(len(line), 20)
+
+
 class RenderFrameAircraftSpansTest(unittest.TestCase):
     def test_span_covers_glyph_and_label(self):
         aircraft = [ac("ABC123", 10.1, 20.0, track_deg=90, callsign="UAL123")]
