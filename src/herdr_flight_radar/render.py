@@ -113,38 +113,67 @@ def _blank_run(grid, row, col, step):
     return count
 
 
+def _fits(grid, row, col_start, length):
+    """True if [col_start, col_start + length) is in-bounds and all blank
+    in `row`. `grid[row]` must already reflect every obstacle placed so
+    far this frame (chart content, other glyphs, other labels)."""
+    width = len(grid[0]) if grid else 0
+    if col_start < 0 or col_start + length > width:
+        return False
+    return all(grid[row][col_start + i] == " " for i in range(length))
+
+
 def _place_label(grid, row, col, label):
     """Write label into blank cells beside (row, col), never letting a
-    label that would otherwise fit run off the grid edge.
+    label that would otherwise fit run off the grid edge, into static
+    chart content (a ring), or into another aircraft's already-placed
+    glyph or label.
 
-    Prefers immediately right of the glyph, matching prior behavior. If
-    the label doesn't fully fit there (grid edge or other content in the
-    way, e.g. a ring or another aircraft) but it fully fits immediately
-    left of the glyph instead, it is placed there so a moving aircraft's
-    label doesn't disappear or shrink as it nears the edge of the pane
-    or a ring. If it doesn't fully fit on either side, it falls back to
-    the prior behavior of truncating on the right, keeping a crowded
+    Tries a fixed set of candidates in priority order: immediately right
+    of the glyph (matching prior behavior), then immediately left, then
+    right and left one row above, then right and left one row below.
+    The first candidate that fits entirely in blank cells wins. Callers
+    must place every aircraft's glyph before placing any aircraft's
+    label (so a later glyph can never clobber an earlier label) and
+    must place labels in a fixed deterministic order (e.g. by hex) so
+    the same frame always resolves collisions the same way.
+
+    If nothing fits fully, falls back to the prior behavior of
+    truncating on the right of the glyph's own row, keeping a crowded
     radar legible when there's genuinely no room to show the whole
-    label anywhere. Returns (col_start, length) of the placed label
-    span so callers can compute the full glyph+label span for rendering
-    purposes.
+    label anywhere -- this is the disclosed density limit: in an
+    extremely tight cluster there can be more aircraft than
+    non-overlapping candidate positions.
+
+    Returns (row, col_start, length) of the placed label span -- the
+    row may differ from the glyph's row when an above/below candidate
+    was used -- so callers can compute the full glyph+label span(s) for
+    rendering purposes.
     """
     label_len = len(label)
+    height = len(grid)
+
+    candidates = [(row, col + 1), (row, col - label_len)]
+    if row - 1 >= 0:
+        candidates.append((row - 1, col + 1))
+        candidates.append((row - 1, col - label_len))
+    if row + 1 < height:
+        candidates.append((row + 1, col + 1))
+        candidates.append((row + 1, col - label_len))
+
+    if label_len:
+        for r, start in candidates:
+            if _fits(grid, r, start, label_len):
+                for i, ch in enumerate(label):
+                    grid[r][start + i] = ch
+                return r, start, label_len
+
     right_space = _blank_run(grid, row, col, +1)
-
-    if right_space < label_len:
-        left_space = _blank_run(grid, row, col, -1)
-        if left_space >= label_len:
-            start = col - label_len
-            for i, ch in enumerate(label):
-                grid[row][start + i] = ch
-            return start, label_len
-
     n = min(label_len, right_space)
     start = col + 1
     for i, ch in enumerate(label[:n]):
         grid[row][start + i] = ch
-    return start, n
+    return row, start, n
 
 
 class Frame:
@@ -186,8 +215,11 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
     center_row, center_col = height_cells // 2, width_cells // 2
     grid[center_row][center_col] = "+"
 
-    aircraft_cells = {}
-    aircraft_spans = []
+    # Two passes: place every aircraft's glyph first, so a later
+    # aircraft's glyph can never clobber an earlier aircraft's label
+    # (see _place_label's docstring). Labels are then placed in a fixed
+    # order (by hex) so collisions resolve the same way every frame.
+    positions = []
     for ac in aircraft:
         px = project_to_px(ac.lat, ac.lon, center_lat, center_lon, radius_miles, canvas)
         if px is None:
@@ -195,13 +227,23 @@ def render_frame(center_lat, center_lon, radius_miles, aircraft, width_cells,
         x, y = px
         col = min(width_cells - 1, max(0, int(x) // 2))
         row = min(height_cells - 1, max(0, int(y) // 4))
-        glyph = heading_glyph(ac.track_deg)
-        grid[row][col] = glyph
+        positions.append((row, col, ac))
+
+    aircraft_cells = {}
+    for row, col, ac in positions:
+        grid[row][col] = heading_glyph(ac.track_deg)
         aircraft_cells[(row, col)] = ac.hex
-        label_start, label_len = _place_label(grid, row, col, aircraft_label(ac))
-        span_start = min(col, label_start)
-        span_end = max(col, label_start + label_len - 1) if label_len else col
-        aircraft_spans.append((row, span_start, span_end - span_start + 1))
+
+    aircraft_spans = []
+    for row, col, ac in sorted(positions, key=lambda p: p[2].hex):
+        label_row, label_start, label_len = _place_label(grid, row, col, aircraft_label(ac))
+        if label_len and label_row != row:
+            aircraft_spans.append((row, col, 1))
+            aircraft_spans.append((label_row, label_start, label_len))
+        else:
+            span_start = min(col, label_start) if label_len else col
+            span_end = max(col, label_start + label_len - 1) if label_len else col
+            aircraft_spans.append((row, span_start, span_end - span_start + 1))
 
     lines = ["".join(row) for row in grid]
     return Frame(lines=lines, aircraft_cells=aircraft_cells,

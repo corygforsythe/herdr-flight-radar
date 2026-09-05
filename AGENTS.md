@@ -38,11 +38,21 @@ This file is the project's committed home for project-intrinsic agent knowledge:
     `/opt/homebrew/bin/dump1090`) is not — `bin/run-python.sh` extends PATH
     before exec'ing python3 so `shutil.which("dump1090")` still finds it.
 - `render._place_label` (see its docstring) draws each aircraft's label to
-  the right of its glyph by default but flips to the left when the label
-  wouldn't otherwise fully fit (grid edge, ring, other content) — don't
-  assume a label cell is always at `col + 1`; use `Frame.aircraft_spans`
-  for the actual drawn range. Hit-testing still only ever uses the glyph's
-  own cell (`aircraft_cells`), independent of label direction.
+  the right of its glyph by default, trying left, then above/below,
+  when the label wouldn't otherwise fully fit (grid edge, ring, or
+  another aircraft's glyph/label) — don't assume a label cell is always
+  at `col + 1`, or on the glyph's own row; use `Frame.aircraft_spans` for
+  the actual drawn range(s) (`render_frame` emits two spans for one
+  aircraft when its label landed on a different row than its glyph).
+  Hit-testing still only ever uses the glyph's own cell (`aircraft_cells`),
+  independent of label placement. `render_frame` draws every aircraft's
+  glyph before placing any label (so a later glyph can't clobber an
+  earlier label) and places labels in a fixed order (sorted by hex) so
+  collisions resolve the same way every frame. Disclosed limit: in an
+  extremely dense cluster there can be more aircraft than non-colliding
+  candidate positions, so some overlap can still occur there — the
+  search is best-effort, not a guarantee of full non-overlap at every
+  density.
 - Mouse click-to-detail uses `curses.mousemask`, not manual SGR escape
   parsing — verified end-to-end via a real PTY harness (inject raw mouse
   bytes, confirm the hit aircraft's detail line renders). That harness
